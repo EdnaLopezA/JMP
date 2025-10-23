@@ -74,6 +74,10 @@ df_short_call=df_short_call.with_columns(pl.col("mcap").log().alias("ln_mcap"))
 df_short_call=df_short_call.with_columns(pl.col("impl_volatility").log().alias("ln_impl_volatility"))
 
 
+
+
+
+
 #%%
 # Price Analysis
 
@@ -89,6 +93,58 @@ df0_prof=df_volume_vs_prc_prof.to_pandas().replace([np.inf, -np.inf], np.nan).dr
 # For Firms
 df_volume_vs_prc_firm=df_itm_m_otm_vs(df_short_call, 'ln_prc', 'firm_dollar_trade_volume','f_k_moneyness')
 df0_firm=df_volume_vs_prc_firm.to_pandas().replace([np.inf, -np.inf], np.nan).dropna()
+
+#%%
+def rdd(df_, x, y, cutoff, var_name):
+    # Define grid of candidate cutoffs for MSE optimization
+    grid = np.linspace(3, 7, 100)
+    # Sharp RDD global linear fit at the given cutoff
+    model, df_used, fig_rdd = sharp_rdd_global_linear(df_, y, x, cutoff, var_name=var_name)
+    fig_cutoff , best_cutoff = optimal_cutoff_mse(df_used, y=y, x=x, cutoff_grid=grid)  
+    return model, best_cutoff, fig_rdd, fig_cutoff
+
+
+
+#%%
+# Customers <100
+model_cutomer, best_cutoff, fig_rdd, fig_cutoff= rdd(df0_customer,'ln_prc','itm_otm',6.3, 'Log Price')
+print(model_cutomer.summary())
+print(f"Optimal cutoff = {best_cutoff:.3f}")
+fig_rdd.show()
+fig_cutoff.show()
+
+#Professionals
+model_prof, best_cutoff, fig_rdd, fig_cutoff= rdd(df0_prof,'ln_prc','itm_otm',6.3, 'Log Price')
+print(model_prof.summary())
+print(f"Optimal cutoff = {best_cutoff:.3f}")
+fig_rdd.show()
+fig_cutoff.show()
+
+
+#Firms
+model_firm, best_cutoff, fig_rdd, fig_cutoff= rdd(df0_firm,'ln_prc','itm_otm',6.67, 'Log Price')
+print(model_firm.summary())
+print(f"Optimal cutoff = {best_cutoff:.3f}")
+fig_rdd.show()
+fig_cutoff.show()
+
+
+# %%
+
+table = summary_col(
+    results=[model_cutomer, model_prof, model_firm],
+    model_names=['Customers <100', 'Professionals', 'Firms'],
+    stars=True,
+    float_format='%0.2f',
+    regressor_order=['Z', 'Xc', 'Z:Xc', 'Intercept'],
+    drop_omitted=True,                  # prevents duplicated rows
+)
+table=table.as_latex()
+print(table)
+
+
+
+
 
 #%%
 
@@ -223,17 +279,6 @@ results_table_firm = summary_col(
 
         
 
-# %%
 
-table = summary_col(
-    results=[model1, model2, model3],
-    model_names=['Customers <100', 'Professionals', 'Firms'],
-    stars=True,
-    float_format='%0.2f',
-    regressor_order=['Z', 'Xc', 'Z:Xc', 'Intercept'],
-    drop_omitted=True,                  # prevents duplicated rows
-)
-table=table.as_latex()
-print(table)
 
 # %%

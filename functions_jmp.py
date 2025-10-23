@@ -127,7 +127,7 @@ def graph_itm_m_otm(df_, vs_var, name_vs_var):
 
 
 def sharp_rdd_global_linear(
-    df, y, x, cutoff, cluster=None, plot=True, var_name=None):
+    df, y, x, cutoff, cluster=None,var_name=None):
     """
     Sharp RDD with global linear specification using the full range of X:
         Y ~ Z + Xc + Z:Xc
@@ -168,34 +168,32 @@ def sharp_rdd_global_linear(
     #    plt.legend()
     #    plt.show()
 
-    if plot:
-        fig = go.Figure()
 
-        # Scatter plot of observed data
-        fig.add_trace(go.Scatter(x=dat[x],y=dat[y],mode='markers',name='Observed data',
-            opacity=0.5,marker=dict(size=5, color='darkblue')))
+    fig_rdd = go.Figure()
 
-        # Fitted line
-        fig.add_trace(go.Scatter(x=df_pred[x],y=yhat,mode='lines',name='Fitted values',
-            line=dict(color='red', width=2)))
+    # Scatter plot of observed data
+    fig_rdd.add_trace(go.Scatter(x=dat[x],y=dat[y],mode='markers',name='Observed data',
+        opacity=0.5,marker=dict(size=5, color='darkblue')))
 
-        # Vertical cutoff line
-        fig.add_vline(x=cutoff,line=dict(color='black', width=1.5, dash='dash'),
-            annotation_text='Cutoff',annotation_position='top')
+    # Fitted line
+    fig_rdd.add_trace(go.Scatter(x=df_pred[x],y=yhat,mode='lines',name='Fitted values',
+        line=dict(color='red', width=2)))
 
-        # Horizontal zero line (thin)
-        fig.add_hline(y=0,line=dict(color='black', width=1.5))
+    # Vertical cutoff line
+    fig_rdd.add_vline(x=cutoff,line=dict(color='black', width=1.5, dash='dash'),
+        annotation_text='Cutoff',annotation_position='top')
 
-        # Layout settings
-        fig.update_layout(width=800, height=600,
-        xaxis_title=var_name, yaxis_title='ITM/OTM Ratio',showlegend=True,template='simple_white',
-        legend=dict(x=0.02, y=0.08, bgcolor='rgba(255,255,255,0.7)', 
-        bordercolor='gray',borderwidth=0.5
+    # Horizontal zero line (thin)
+    fig_rdd.add_hline(y=0,line=dict(color='black', width=1.5))
+
+    # Layout settings
+    fig_rdd.update_layout(width=800, height=600,
+    xaxis_title=var_name, yaxis_title='ITM/OTM Ratio',showlegend=True,template='simple_white',
+    legend=dict(x=0.02, y=0.08, bgcolor='rgba(255,255,255,0.7)', 
+    bordercolor='gray',borderwidth=0.5
     ))
 
-    fig.show()
-
-    return model, dat, df_pred, yhat
+    return model, dat, fig_rdd
 
 
 
@@ -213,7 +211,7 @@ def sharp_rdd_global_linear_mse(df, y, x, cutoff):
     return model
 
 # ---------- Optimal cutoff search ----------
-def optimal_cutoff_mse(df, y, x, cutoff_grid=None, plot=True):
+def optimal_cutoff_mse(df, y, x, cutoff_grid=None):
     """
     Search over candidate cutoffs and choose the one minimizing in-sample MSE.
     Returns:
@@ -236,18 +234,36 @@ def optimal_cutoff_mse(df, y, x, cutoff_grid=None, plot=True):
 
     results_df = pd.DataFrame(results)
 
-    # ---------- Plot ----------
-    #if plot:
-    #    plt.figure(figsize=(8,5))
-    #    plt.plot(results_df["cutoff"], results_df["mse"], marker="o", color="orange", label="MSE by cutoff")
-    #    plt.axvline(best_cutoff, color="red", linestyle="--", label=f"Optimal cutoff = {best_cutoff:.3f}")
-    #    plt.title("Sharp RDD: Cutoff Level Minimizing MSE")
-    #    plt.xlabel("Candidate cutoff")
-    #    plt.ylabel("Mean Squared Error (MSE)")
-    #    plt.legend()
-    #    plt.show()
-    #    print(f"Optimal cutoff (min MSE): {best_cutoff:.3f}")
+    fig_cutoff = go.Figure()
 
-    return best_cutoff, results_df, best_model
+    # MSE line with markers
+    fig_cutoff.add_trace(go.Scatter(
+        x=results_df["cutoff"],
+        y=results_df["mse"],
+        mode="lines+markers",
+        name="MSE by cutoff",
+        line=dict(width=2),
+        marker=dict(size=6)
+    ))
+
+    # Vertical line at optimal cutoff
+    fig_cutoff.add_vline(
+        x=float(best_cutoff),
+        line=dict(color="red", width=2, dash="dash"),
+        annotation_text=f"Optimal = {best_cutoff:.3f}",
+        annotation_position="top"
+    )
+
+    # Layout / axes
+    fig_cutoff.update_layout(
+        width=800, height=500,
+        title="Sharp RDD: Cutoff Level Minimizing MSE",
+        xaxis_title="Candidate cutoff",
+        yaxis_title="Mean Squared Error (MSE)",
+        template="simple_white",
+        showlegend=True
+    )
+
+    return fig_cutoff , best_cutoff
 
 
