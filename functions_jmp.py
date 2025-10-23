@@ -237,16 +237,16 @@ def optimal_cutoff_mse(df, y, x, cutoff_grid=None, plot=True):
     results_df = pd.DataFrame(results)
 
     # ---------- Plot ----------
-    if plot:
-        plt.figure(figsize=(8,5))
-        plt.plot(results_df["cutoff"], results_df["mse"], marker="o", color="orange", label="MSE by cutoff")
-        plt.axvline(best_cutoff, color="red", linestyle="--", label=f"Optimal cutoff = {best_cutoff:.3f}")
-        plt.title("Sharp RDD: Cutoff Level Minimizing MSE")
-        plt.xlabel("Candidate cutoff")
-        plt.ylabel("Mean Squared Error (MSE)")
-        plt.legend()
-        plt.show()
-        print(f"Optimal cutoff (min MSE): {best_cutoff:.3f}")
+    #if plot:
+    #    plt.figure(figsize=(8,5))
+    #    plt.plot(results_df["cutoff"], results_df["mse"], marker="o", color="orange", label="MSE by cutoff")
+    #    plt.axvline(best_cutoff, color="red", linestyle="--", label=f"Optimal cutoff = {best_cutoff:.3f}")
+    #    plt.title("Sharp RDD: Cutoff Level Minimizing MSE")
+    #    plt.xlabel("Candidate cutoff")
+    #    plt.ylabel("Mean Squared Error (MSE)")
+    #    plt.legend()
+    #    plt.show()
+    #    print(f"Optimal cutoff (min MSE): {best_cutoff:.3f}")
 
     return best_cutoff, results_df, best_model
 
