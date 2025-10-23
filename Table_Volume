@@ -1,0 +1,151 @@
+
+#%%
+import numpy as np
+import pandas as pd
+import polars as pl
+import os
+os.chdir("/Users/ednaloav/Dropbox/JMP/JMP_Github/")
+from functions_jmp import *
+
+#%%
+# Read parquet
+df=pl.read_parquet("/Users/ednaloav/Dropbox/JMP/Data/NEW/year/open_volume_*.parquet")       
+
+# %%
+# Table of average volume
+vol_cols=["customer_trade_volume",
+        "customer_dollar_trade_volume",
+        "customer_100_trade_volume",
+        "customer_100_dollar_trade_volume",
+        "customer_100_199_trade_volume",
+        "customer_100_199_dollar_trade_volume",
+        "customer_199_trade_volume",
+        "customer_199_dollar_trade_volume",
+        "professional_trade_volume",
+        "professional_dollar_trade_volume",
+        "firm_trade_volume",
+        "firm_dollar_trade_volume",]
+
+df = df.with_columns([
+    (pl.col(c) * 100).alias(c) for c in vol_cols
+])
+
+#%%
+# IN US DOLLARS
+daily_totals = (
+    df
+    .group_by(["date", "ticker", "f_k_moneyness", "cp_flag"])
+    .agg([pl.col(c).sum() for c in vol_cols])
+)
+
+def summary_table(df_,variable,tipo):
+    df_=df_.filter(pl.col(variable)>0)
+    df_=df_.filter(pl.col('cp_flag')==tipo).group_by('f_k_moneyness').agg(
+        pl.mean(variable).alias('Mean'),
+        pl.col(variable).quantile(.05).alias('5th'),
+        pl.col(variable).quantile(.25).alias('25th'),
+        pl.col(variable).quantile(.5).alias('Median'),
+        pl.col(variable).quantile(.75).alias('75th'),
+        pl.col(variable).quantile(.95).alias('95th'),
+        pl.sum(variable).alias('Total'),
+        ).to_pandas().set_index('f_k_moneyness')
+    total=df_['Total'].sum()
+    df_['Percentage']=df_['Total']/total*100
+    df_['Total Percentage']=df_['Percentage'].apply(lambda x: '(' + str("{:,.0f}".format(x)) +'\%)')
+    df_=df_[['Mean','5th','25th','Median','75th','95th','Total Percentage']].T[['itm','otm','atm']]
+    return df_
+
+## For Call Options
+df_customer_100= summary_table(daily_totals,'customer_100_dollar_trade_volume','C')
+df_customer_100_199= summary_table(daily_totals,'customer_100_199_dollar_trade_volume','C')
+df_customer_199= summary_table(daily_totals,'customer_199_dollar_trade_volume','C')
+df_prof= summary_table(daily_totals,'professional_dollar_trade_volume','C')
+df_firm= summary_table(daily_totals,'firm_dollar_trade_volume','C')
+
+df_all_call=pd.concat([df_customer_100,df_customer_100_199,df_customer_199,df_prof,df_firm],axis=1)
+s=summary_stats_latex_tab(df_all_call, panel_title='\\emph{A. Call Options}',begin_tab=True)
+
+## For Put Options
+df_customer_100= summary_table(daily_totals,'customer_100_dollar_trade_volume','P')
+df_customer_100_199= summary_table(daily_totals,'customer_100_199_dollar_trade_volume','P')
+df_customer_199= summary_table(daily_totals,'customer_199_dollar_trade_volume','P')
+df_prof= summary_table(daily_totals,'professional_dollar_trade_volume','P')
+df_firm= summary_table(daily_totals,'firm_dollar_trade_volume','P')
+
+df_all_put=pd.concat([df_customer_100,df_customer_100_199,df_customer_199,df_prof,df_firm],axis=1)
+s=summary_stats_latex_tab(df_all_put, panel_title='\\emph{B. Put Options}',begin_tab=True)
+
+
+
+# %%
+## IN PERCENTAGE
+
+
+# 1) Totals by day, cp_flag
+daily_total_pct = (
+    df
+    .group_by(["date", "cp_flag"])
+    .agg([pl.col(c).sum().alias(f"{c}_total") for c in vol_cols])
+)
+
+# 2) Totals by day, moneyness, cp_flag
+daily_total_moneyness_pct = (
+    df
+    .group_by(["date", "f_k_moneyness", "cp_flag"])
+    .agg([pl.col(c).sum().alias(f"{c}_f_k_total") for c in vol_cols])
+)
+
+table_avg_volume_pct = (
+    daily_total_moneyness_pct
+    .join(
+        daily_total_pct,
+        on=["date", "cp_flag"],
+        how="left"
+    )
+    .with_columns([
+        # For every metric c, compute c_f_k_total / c_total
+        (pl.col(f"{c}_f_k_total") / pl.col(f"{c}_total")).alias(f"{c}_f_k_pct")
+        for c in vol_cols
+    ]))
+
+
+def summary_table(df_,variable,tipo):
+    df_=df_.filter(pl.col(variable)>0)
+    df_=df_.filter(pl.col('cp_flag')==tipo).group_by('f_k_moneyness').agg(
+        pl.mean(variable).alias('Mean'),
+        pl.col(variable).quantile(.05).alias('5th'),
+        pl.col(variable).quantile(.25).alias('25th'),
+        pl.col(variable).quantile(.5).alias('Median'),
+        pl.col(variable).quantile(.75).alias('75th'),
+        pl.col(variable).quantile(.95).alias('95th'),
+        pl.sum(variable).alias('Total'),
+        ).to_pandas().set_index('f_k_moneyness')
+    total=df_['Total'].sum()
+    df_['Percentage']=df_['Total']/total*100
+    df_['Total Percentage']=df_['Percentage'].apply(lambda x: '(' + str("{:,.0f}".format(x)) +'\%)')
+    df_=df_[['Mean','5th','25th','Median','75th','95th','Total Percentage']].T[['itm','otm','atm']]
+    return df_
+
+
+
+df_customer_100= summary_table(table_avg_volume_pct,'customer_100_dollar_trade_volume_f_k_pct','C')
+df_customer_100_199= summary_table(table_avg_volume_pct,'customer_100_199_dollar_trade_volume_f_k_pct','C')
+df_customer_199= summary_table(table_avg_volume_pct,'customer_199_dollar_trade_volume_f_k_pct','C')
+df_prof= summary_table(table_avg_volume_pct,'professional_dollar_trade_volume_f_k_pct','C')
+df_firm= summary_table(table_avg_volume_pct,'firm_dollar_trade_volume_f_k_pct','C')
+
+df_all_call=pd.concat([df_customer_100,df_customer_100_199,df_customer_199,df_prof,df_firm],axis=1)
+
+
+
+# 3) Join and compute per-metric moneyness percentages
+
+
+table_avg_volume_pct=table_avg_volume_pct.sort("cp_flag","date","f_k_moneyness")
+
+table_avg_volume_pct=table_avg_volume_pct.group_by(["f_k_moneyness", "cp_flag"]).agg([pl.col(f"{c}_f_k_pct").mean()  for c in vol_cols])
+table_avg_volume_pct_call=table_avg_volume_pct.apply(lambda x: '(' + str("{:,.0f}".format(x)) +'\%)')
+
+
+
+# %%
