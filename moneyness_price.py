@@ -156,19 +156,40 @@ fig_cutoff.show()
 
 
 # %%
-
+import re
 table = summary_col(
     results=[model_cutomer_call, model_prof_call, model_firm_call,model_cutomer_put,model_prof_put,model_firm_put],
-    model_names=['Call: Customers <100', 'Call: Professionals', 'Call: Firms','Put: Customers <100', 'Put: Professionals', 'Put: Firms'],
+    model_names=['Customers <100', 'Professionals', 'Firms','Customers <100', 'Professionals', 'Firms'],
     stars=True,
     float_format='%0.2f',
     regressor_order=['Z', 'Xc', 'Z:Xc', 'Intercept'],
     drop_omitted=True,                  # prevents duplicated rows
 )
-table=table.as_latex()
-print(table)
+latex_table = table.as_latex()
+latex_table = re.sub(
+    r'(\\begin\{tabular\}\{l.*?\}\n)(.*\n)',
+    r'\1'
+    r'& \\multicolumn{3}{c}{Call} & \\multicolumn{3}{c}{Put} \\\\\n'
+    r'\\cline{2-4} \\cline{5-7}\n'
+    r'\2',
+    latex_table
+)
+
+
+# Step 4. Optional small adjustments for paper formatting
+latex_table = latex_table.replace('\\\\\nNotes:', '\\\\[-1.2ex]\n\\midrule\nNotes:')
+
+# Step 5. Output final LaTeX code
+print(latex_table)
+
 
 #%%
+
+
+
+
+
+
 
 
 

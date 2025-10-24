@@ -1,0 +1,160 @@
+merge2=pl.scan_parquet("/Users/ednaloav/Dropbox/JMP/Data/NEW/optionmetrics_allexchanges_2022_1.parquet")       
+
+merge2=merge2.with_columns([
+    pl.when((pl.col("dtm") == 0))
+    .then(pl.lit('0_days'))
+    .when((pl.col("dtm") > 0) & (pl.col("dtm")<=7))
+    .then(pl.lit('1_7_days'))
+    .when((pl.col("dtm") > 7) & (pl.col("dtm")<=30))
+    .then(pl.lit("7_30_days"))
+    .when((pl.col("dtm") > 30) & (pl.col("dtm")<=90))
+    .then(pl.lit("30_90_days"))
+    .when((pl.col("dtm") > 90)& (pl.col("dtm")<= 120))
+    .then(pl.lit("90_120_days"))
+    .when((pl.col("dtm") > 120))
+    .then(pl.lit("120_days"))
+    .otherwise(pl.lit('nan')).alias("maturity")]) 
+
+merge2=merge2.with_columns(((pl.col("forward_price"))/(pl.col('strike_price'))).alias("f_k"))
+merge2=merge2.with_columns([
+pl.when((pl.col("f_k") >0.975) & (pl.col("f_k") < 1.025))
+.then(pl.lit('atm'))
+.when((pl.col("f_k") <= 0.975) & (pl.col("cp_flag")=='P'))
+.then(pl.lit("itm"))
+.when((pl.col("f_k") <= 0.975) & (pl.col("cp_flag")=='C'))
+.then(pl.lit("otm"))
+.when((pl.col("f_k") >= 1.025) & (pl.col("cp_flag")=='P'))
+.then(pl.lit("otm"))
+.when((pl.col("f_k") >= 1.025) & (pl.col("cp_flag")=='C'))
+.then(pl.lit("itm"))
+.otherwise(pl.lit('nan')).alias("f_k_moneyness")]) 
+merge2=merge2.with_columns((pl.col("impl_volatility")*100).alias("impl_volatility"))
+merge2=merge2.with_columns((pl.col("delta")*100).alias("delta"))
+
+merge2=merge2.with_columns(pl.col("f_k").round(1).alias("f_k"))
+merge2=merge2.with_columns(pl.col("impl_volatility").round(0).alias("impl_volatility"))
+merge2=merge2.with_columns(pl.col("delta").round(0).alias("delta"))
+
+merge2=merge2.with_columns(((pl.col("best_offer")+pl.col("best_bid"))/2 ).alias("option_price"))
+# All Customers
+merge2=merge2.with_columns(((pl.col("customer_open_buy_volume")+pl.col("customer_open_sell_volume"))).alias("customer_trade_volume"))
+merge2=merge2.with_columns(((pl.col("option_price"))*(pl.col("customer_trade_volume"))).alias("customer_dollar_trade_volume"))
+# Small Customers
+merge2=merge2.with_columns(((pl.col("customer_open_buy_volume_100")+pl.col("customer_open_sell_volume_100"))).alias("customer_100_trade_volume"))
+merge2=merge2.with_columns(((pl.col("option_price"))*(pl.col("customer_100_trade_volume"))).alias("customer_100_dollar_trade_volume"))
+# Medium Customers
+merge2=merge2.with_columns(((pl.col("customer_open_buy_volume_100_199")+pl.col("customer_open_sell_volume_100_199"))).alias("customer_100_199_trade_volume"))
+merge2=merge2.with_columns(((pl.col("option_price"))*(pl.col("customer_100_199_trade_volume"))).alias("customer_100_199_dollar_trade_volume"))
+# High Customers
+merge2=merge2.with_columns(((pl.col("customer_open_buy_volume_199")+pl.col("customer_open_sell_volume_199"))).alias("customer_199_trade_volume"))
+merge2=merge2.with_columns(((pl.col("option_price"))*(pl.col("customer_199_trade_volume"))).alias("customer_199_dollar_trade_volume"))
+#PROFESSIONALS
+merge2=merge2.with_columns(((pl.col("professional_customer_open_buy_volume")+pl.col("professional_customer_open_sell_volume"))).alias("professional_trade_volume"))
+merge2=merge2.with_columns(((pl.col("option_price"))*(pl.col("professional_trade_volume"))).alias("professional_dollar_trade_volume"))
+#FIRMS
+merge2=merge2.with_columns(((pl.col("firm_open_buy_volume")+pl.col("firm_open_sell_volume"))).alias("firm_trade_volume"))
+merge2=merge2.with_columns(((pl.col("option_price"))*(pl.col("firm_trade_volume"))).alias("firm_dollar_trade_volume"))
+
+agg_cols = [
+    "customer_trade_volume",
+    "customer_dollar_trade_volume",
+    "customer_100_trade_volume",
+    "customer_100_dollar_trade_volume",
+    "customer_100_199_trade_volume",
+    "customer_100_199_dollar_trade_volume",
+    "customer_199_trade_volume",
+    "customer_199_dollar_trade_volume",
+    "professional_trade_volume",
+    "professional_dollar_trade_volume",
+    "firm_trade_volume",
+    "firm_dollar_trade_volume",]
+    
+merge2 = (merge2.group_by(["date", "ticker", "f_k", "f_k_moneyness","maturity","cp_flag","impl_volatility","delta"]).agg([pl.col(c).sum().alias(c) for c in agg_cols]))
+merge2 = merge2.filter((pl.col('customer_trade_volume')+pl.col('professional_trade_volume')+pl.col('firm_trade_volume'))>0)
+merge2 = merge2.collect()
+merge2 = merge2.filter(pl.col("ticker").is_in(stocks))
+
+
+
+
+#%%
+
+df_all=pl.DataFrame()
+for month in [1,2,]:
+    merge=pl.scan_parquet("/Users/ednaloav/Dropbox/JMP/Data/NEW/optionmetrics_allexchanges_2022_"+str(month)+".parquet")       
+
+    merge=merge.with_columns([
+        pl.when((pl.col("dtm") == 0))
+        .then(pl.lit('0_days'))
+        .when((pl.col("dtm") > 0) & (pl.col("dtm")<=7))
+        .then(pl.lit('1_7_days'))
+        .when((pl.col("dtm") > 7) & (pl.col("dtm")<=30))
+        .then(pl.lit("7_30_days"))
+        .when((pl.col("dtm") > 30) & (pl.col("dtm")<=90))
+        .then(pl.lit("30_90_days"))
+        .when((pl.col("dtm") > 90)& (pl.col("dtm")<= 120))
+        .then(pl.lit("90_120_days"))
+        .when((pl.col("dtm") > 120))
+        .then(pl.lit("120_days"))
+        .otherwise(pl.lit('nan')).alias("maturity")]) 
+
+    merge=merge.with_columns(((pl.col("forward_price"))/(pl.col('strike_price'))).alias("f_k"))
+    merge=merge.with_columns([
+    pl.when((pl.col("f_k") >0.975) & (pl.col("f_k") < 1.025))
+    .then(pl.lit('atm'))
+    .when((pl.col("f_k") <= 0.975) & (pl.col("cp_flag")=='P'))
+    .then(pl.lit("itm"))
+    .when((pl.col("f_k") <= 0.975) & (pl.col("cp_flag")=='C'))
+    .then(pl.lit("otm"))
+    .when((pl.col("f_k") >= 1.025) & (pl.col("cp_flag")=='P'))
+    .then(pl.lit("otm"))
+    .when((pl.col("f_k") >= 1.025) & (pl.col("cp_flag")=='C'))
+    .then(pl.lit("itm"))
+    .otherwise(pl.lit('nan')).alias("f_k_moneyness")]) 
+    merge=merge.with_columns((pl.col("impl_volatility")*100).alias("impl_volatility"))
+    merge=merge.with_columns((pl.col("delta")*100).alias("delta"))
+
+    merge=merge.with_columns(pl.col("f_k").round(1).alias("f_k"))
+    merge=merge.with_columns(pl.col("impl_volatility").round(0).alias("impl_volatility"))
+    merge=merge.with_columns(pl.col("delta").round(0).alias("delta"))
+
+    merge=merge.with_columns(((pl.col("best_offer")+pl.col("best_bid"))/2 ).alias("option_price"))
+    # All Customers
+    merge=merge.with_columns(((pl.col("customer_open_buy_volume")+pl.col("customer_open_sell_volume"))).alias("customer_trade_volume"))
+    merge=merge.with_columns(((pl.col("option_price"))*(pl.col("customer_trade_volume"))).alias("customer_dollar_trade_volume"))
+    # Small Customers
+    merge=merge.with_columns(((pl.col("customer_open_buy_volume_100")+pl.col("customer_open_sell_volume_100"))).alias("customer_100_trade_volume"))
+    merge=merge.with_columns(((pl.col("option_price"))*(pl.col("customer_100_trade_volume"))).alias("customer_100_dollar_trade_volume"))
+    # Medium Customers
+    merge=merge.with_columns(((pl.col("customer_open_buy_volume_100_199")+pl.col("customer_open_sell_volume_100_199"))).alias("customer_100_199_trade_volume"))
+    merge=merge.with_columns(((pl.col("option_price"))*(pl.col("customer_100_199_trade_volume"))).alias("customer_100_199_dollar_trade_volume"))
+    # High Customers
+    merge=merge.with_columns(((pl.col("customer_open_buy_volume_199")+pl.col("customer_open_sell_volume_199"))).alias("customer_199_trade_volume"))
+    merge=merge.with_columns(((pl.col("option_price"))*(pl.col("customer_199_trade_volume"))).alias("customer_199_dollar_trade_volume"))
+    #PROFESSIONALS
+    merge=merge.with_columns(((pl.col("professional_customer_open_buy_volume")+pl.col("professional_customer_open_sell_volume"))).alias("professional_trade_volume"))
+    merge=merge.with_columns(((pl.col("option_price"))*(pl.col("professional_trade_volume"))).alias("professional_dollar_trade_volume"))
+    #FIRMS
+    merge=merge.with_columns(((pl.col("firm_open_buy_volume")+pl.col("firm_open_sell_volume"))).alias("firm_trade_volume"))
+    merge=merge.with_columns(((pl.col("option_price"))*(pl.col("firm_trade_volume"))).alias("firm_dollar_trade_volume"))
+
+    agg_cols = [
+        "customer_trade_volume",
+        "customer_dollar_trade_volume",
+        "customer_100_trade_volume",
+        "customer_100_dollar_trade_volume",
+        "customer_100_199_trade_volume",
+        "customer_100_199_dollar_trade_volume",
+        "customer_199_trade_volume",
+        "customer_199_dollar_trade_volume",
+        "professional_trade_volume",
+        "professional_dollar_trade_volume",
+        "firm_trade_volume",
+        "firm_dollar_trade_volume",]
+        
+    merge = (merge.group_by(["date", "ticker", "f_k", "f_k_moneyness","maturity","cp_flag","impl_volatility","delta"]).agg([pl.col(c).sum().alias(c) for c in agg_cols]))
+    merge = merge.filter((pl.col('customer_trade_volume')+pl.col('professional_trade_volume')+pl.col('firm_trade_volume'))>0)
+    merge = merge.collect()
+    merge = merge.filter(pl.col("ticker").is_in(stocks))
+    df_all = pl.concat([df_all, merge])
+
