@@ -57,44 +57,25 @@ del crsp
 
 # %%
 ## Filter the data 
-df_short_call = (
-    df
-    .filter(pl.col("maturity").is_in(["0_days" ,"1_7_days"]))
-    .filter(pl.col("cp_flag") == "C")
-    .filter(pl.col("prc") < 100000)
-    .filter(pl.col("f_k_moneyness").is_in(["itm", "otm"]))
-)
 
-df_short_call = df_short_call.with_columns((pl.col("prc").round()).alias("prc"))    
-df_short_call = df_short_call.with_columns(((pl.col("prc") / 5).round() * 5).alias("prc"))   
-df_short_call = df_short_call.with_columns(((pl.col("mcap") / 1000000000).round() ).alias("mcap"))  
+def database_filter(df_, cp_flag):
+    df0 = (
+        df_.filter(pl.col("maturity").is_in(["0_days" ,"1_7_days"]))
+        #df_.filter(pl.col("maturity").is_in(["90_120_days","120_days" ]))
+        .filter(pl.col("cp_flag") == cp_flag)
+        .filter(pl.col("prc") < 100000)
+        .filter(pl.col("f_k_moneyness").is_in(["itm", "otm"]))
+    )
 
-df_short_call=df_short_call.with_columns(pl.col("prc").log().alias("ln_prc"))
-df_short_call=df_short_call.with_columns(pl.col("mcap").log().alias("ln_mcap"))
-df_short_call=df_short_call.with_columns(pl.col("impl_volatility").log().alias("ln_impl_volatility"))
+    df0 = df0.with_columns((pl.col("prc").round()).alias("prc"))    
+    df0 = df0.with_columns(((pl.col("prc") / 5).round() * 5).alias("prc"))   
+    df0 = df0.with_columns(((pl.col("mcap") / 1000000000).round() ).alias("mcap"))  
 
+    df0=df0.with_columns(pl.col("prc").log().alias("ln_prc"))
+    df0=df0.with_columns(pl.col("mcap").log().alias("ln_mcap"))
+    df0=df0.with_columns(pl.col("impl_volatility").log().alias("ln_impl_volatility"))
+    return df0
 
-
-
-
-
-#%%
-# Price Analysis
-
-##  Calculate the ITM_OTM Ratio
-# For Customers
-df_volume_vs_prc_customer=df_itm_m_otm_vs(df_short_call, 'ln_prc', 'customer_100_dollar_trade_volume','f_k_moneyness')
-df0_customer=df_volume_vs_prc_customer.to_pandas().replace([np.inf, -np.inf], np.nan).dropna()
-
-# For Professionals
-df_volume_vs_prc_prof=df_itm_m_otm_vs(df_short_call, 'ln_prc', 'professional_dollar_trade_volume','f_k_moneyness')
-df0_prof=df_volume_vs_prc_prof.to_pandas().replace([np.inf, -np.inf], np.nan).dropna()
-
-# For Firms
-df_volume_vs_prc_firm=df_itm_m_otm_vs(df_short_call, 'ln_prc', 'firm_dollar_trade_volume','f_k_moneyness')
-df0_firm=df_volume_vs_prc_firm.to_pandas().replace([np.inf, -np.inf], np.nan).dropna()
-
-#%%
 def rdd(df_, x, y, cutoff, var_name):
     # Define grid of candidate cutoffs for MSE optimization
     grid = np.linspace(3, 7, 100)
@@ -104,36 +85,81 @@ def rdd(df_, x, y, cutoff, var_name):
     return model, best_cutoff, fig_rdd, fig_cutoff
 
 
+#%%
+df_short_call=database_filter(df, "C")
+df_short_put=database_filter(df, "P")
 
 #%%
+# Price Analysis
+
+## CALL OPTIONS
 # Customers <100
-model_cutomer, best_cutoff, fig_rdd, fig_cutoff= rdd(df0_customer,'ln_prc','itm_otm',6.3, 'Log Price')
-print(model_cutomer.summary())
-print(f"Optimal cutoff = {best_cutoff:.3f}")
-fig_rdd.show()
-fig_cutoff.show()
-
-#Professionals
-model_prof, best_cutoff, fig_rdd, fig_cutoff= rdd(df0_prof,'ln_prc','itm_otm',6.3, 'Log Price')
-print(model_prof.summary())
+df_volume_vs_prc_customer=df_itm_m_otm_vs(df_short_call, 'ln_prc', 'customer_100_dollar_trade_volume','f_k_moneyness')
+df0_customer=df_volume_vs_prc_customer.to_pandas().replace([np.inf, -np.inf], np.nan).dropna()
+model_cutomer_call, best_cutoff, fig_rdd, fig_cutoff= rdd(df0_customer,'ln_prc','itm_otm',6.3, 'Log Price')
+#print(model_cutomer_call.summary())
 print(f"Optimal cutoff = {best_cutoff:.3f}")
 fig_rdd.show()
 fig_cutoff.show()
 
 
-#Firms
-model_firm, best_cutoff, fig_rdd, fig_cutoff= rdd(df0_firm,'ln_prc','itm_otm',6.67, 'Log Price')
-print(model_firm.summary())
+# For Professionals
+df_volume_vs_prc_prof=df_itm_m_otm_vs(df_short_call, 'ln_prc', 'professional_dollar_trade_volume','f_k_moneyness')
+df0_prof_call=df_volume_vs_prc_prof.to_pandas().replace([np.inf, -np.inf], np.nan).dropna()
+model_prof_call, best_cutoff, fig_rdd, fig_cutoff= rdd(df0_prof_call,'ln_prc','itm_otm',6.3, 'Log Price')
+#print(model_prof.summary())
 print(f"Optimal cutoff = {best_cutoff:.3f}")
 fig_rdd.show()
 fig_cutoff.show()
+
+
+# For Firms
+df_volume_vs_prc_firm=df_itm_m_otm_vs(df_short_call, 'ln_prc', 'firm_dollar_trade_volume','f_k_moneyness')
+df0_firm_call=df_volume_vs_prc_firm.to_pandas().replace([np.inf, -np.inf], np.nan).dropna()
+model_firm_call, best_cutoff, fig_rdd, fig_cutoff= rdd(df0_firm_call,'ln_prc','itm_otm',6.7, 'Log Price')
+#print(model_firm.summary())
+print(f"Optimal cutoff = {best_cutoff:.3f}")
+fig_rdd.show()
+fig_cutoff.show()
+
+
+#%%
+# Price Analysis
+
+## PUT OPTIONS
+# Customers <100
+df_volume_vs_prc_customer=df_itm_m_otm_vs(df_short_put, 'ln_prc', 'customer_100_dollar_trade_volume','f_k_moneyness')
+df0_customer=df_volume_vs_prc_customer.to_pandas().replace([np.inf, -np.inf], np.nan).dropna()
+model_cutomer_put, best_cutoff, fig_rdd, fig_cutoff= rdd(df0_customer,'ln_prc','itm_otm',6.3, 'Log Price')
+print(f"Optimal cutoff = {best_cutoff:.3f}")
+fig_rdd.show()
+fig_cutoff.show()
+
+
+# For Professionals
+df_volume_vs_prc_prof=df_itm_m_otm_vs(df_short_put, 'ln_prc', 'professional_dollar_trade_volume','f_k_moneyness')
+df0_prof_put=df_volume_vs_prc_prof.to_pandas().replace([np.inf, -np.inf], np.nan).dropna()
+model_prof_put, best_cutoff, fig_rdd, fig_cutoff= rdd(df0_prof_put,'ln_prc','itm_otm',6.3, 'Log Price')
+print(f"Optimal cutoff = {best_cutoff:.3f}")
+fig_rdd.show()
+fig_cutoff.show()
+
+
+# For Firms
+df_volume_vs_prc_firm=df_itm_m_otm_vs(df_short_put, 'ln_prc', 'firm_dollar_trade_volume','f_k_moneyness')
+df0_firm_put=df_volume_vs_prc_firm.to_pandas().replace([np.inf, -np.inf], np.nan).dropna()
+model_firm_put, best_cutoff, fig_rdd, fig_cutoff= rdd(df0_firm_put,'ln_prc','itm_otm',6.7, 'Log Price')
+print(f"Optimal cutoff = {best_cutoff:.3f}")
+fig_rdd.show()
+fig_cutoff.show()
+
 
 
 # %%
 
 table = summary_col(
-    results=[model_cutomer, model_prof, model_firm],
-    model_names=['Customers <100', 'Professionals', 'Firms'],
+    results=[model_cutomer_call, model_prof_call, model_firm_call,model_cutomer_put,model_prof_put,model_firm_put],
+    model_names=['Call: Customers <100', 'Call: Professionals', 'Call: Firms','Put: Customers <100', 'Put: Professionals', 'Put: Firms'],
     stars=True,
     float_format='%0.2f',
     regressor_order=['Z', 'Xc', 'Z:Xc', 'Intercept'],
@@ -141,6 +167,10 @@ table = summary_col(
 )
 table=table.as_latex()
 print(table)
+
+#%%
+
+
 
 
 
